@@ -268,6 +268,20 @@ public class ConanHostedFacet
             .build();
   }
 
+  public Response getSearchResults(final Context context) throws IOException{
+    Map<String, String[]> resHashMap = new HashMap<>();
+    String[] dummy = {"Poco/1.7.8p3@pocoproject/stable"};
+
+    resHashMap.put("results", dummy);
+    ObjectMapper mapper = new ObjectMapper();
+    String response = mapper.writeValueAsString(resHashMap);
+
+    return new Response.Builder()
+            .status(success(OK))
+            .payload(new StringPayload(response, APPLICATION_JSON))
+            .build();
+  }
+
   public Response get(final Context context) {
     log.debug("Request {}", context.getRequest().getPath());
 

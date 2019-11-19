@@ -123,6 +123,12 @@ public class HostedHandlers
     return HttpResponses.ok();
   };
 
+  final Handler searchV1 = context -> {
+    return context.getRepository()
+        .facet(ConanHostedFacet.class)
+        .getSearchResults(context);
+  };
+
   final Handler packageSnapshot = context -> {
     State state = context.getAttributes().require(State.class);
     ConanCoords coord = convertFromState(state);

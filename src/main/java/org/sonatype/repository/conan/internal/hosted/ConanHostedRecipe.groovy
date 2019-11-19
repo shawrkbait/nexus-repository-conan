@@ -35,6 +35,7 @@ import org.sonatype.repository.conan.internal.AssetKind
 import org.sonatype.repository.conan.internal.ConanFormat
 import org.sonatype.repository.conan.internal.ConanRecipeSupport
 import org.sonatype.repository.conan.internal.security.token.ConanTokenFacet
+import org.sonatype.nexus.repository.search.SearchFacet
 
 import com.google.inject.Provider
 
@@ -122,6 +123,8 @@ class ConanHostedRecipe
   private static final String AUTHENTICATE_URL = "/v1/users/authenticate"
 
   private static final String PING = "/v1/ping"
+
+  private static final String SEARCH_V1 = "/v1/conans/search"
 
   @Inject
   Provider<ConanHostedFacet> hostedFacet
@@ -219,6 +222,19 @@ class ConanHostedRecipe
         .handler(unitOfWorkHandler)
         .handler(hostedHandler.authenticate)
         .create())
+
+    // GET /-/v1/search (npm v1 search)
+    builder.route(searchV1Matcher()
+        .handler(timingHandler)
+        .handler(securityHandler)
+        .handler(exceptionHandler)
+        .handler(partialFetchHandler)
+        .handler(conditionalRequestHandler)
+        .handler(contentHeadersHandler)
+        .handler(unitOfWorkHandler)
+        .handler(hostedHandler.searchV1)
+        .create())
+
 
     builder.route(new Route.Builder()
         .matcher(BrowseUnsupportedHandler.MATCHER)
@@ -451,4 +467,17 @@ class ConanHostedRecipe
         )
     )
   }
+
+  /**
+   * Matcher for npm package v1 search.
+   */
+  static Builder searchV1Matcher() {
+    new Builder().matcher(
+        and(
+            new ActionMatcher(GET),
+            new TokenMatcher(SEARCH_V1)
+        )
+      )
+  }
+
 }
