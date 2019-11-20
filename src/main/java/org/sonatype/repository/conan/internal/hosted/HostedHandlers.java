@@ -32,8 +32,10 @@ import org.sonatype.repository.conan.internal.metadata.ConanCoords;
 import org.sonatype.repository.conan.internal.security.token.ConanTokenFacet;
 
 import static org.sonatype.nexus.repository.http.HttpStatus.NOT_FOUND;
+import org.sonatype.nexus.repository.view.Parameters;
 import static org.sonatype.repository.conan.internal.metadata.ConanCoords.convertFromState;
 import static org.sonatype.repository.conan.internal.metadata.ConanCoords.getPath;
+import org.sonatype.repository.conan.internal.search.ConanSearchFacet;
 
 /**
  * @since 0.0.2
@@ -41,124 +43,128 @@ import static org.sonatype.repository.conan.internal.metadata.ConanCoords.getPat
 @Named
 @Singleton
 public class HostedHandlers
-    extends ComponentSupport
-{
-  private static final String V1_CONANS = "/v1/conans/";
+        extends ComponentSupport {
 
-  private static final String CLIENT_CHECKSUM = "X-Checksum-Sha1";
+    private static final String V1_CONANS = "/v1/conans/";
 
-  final Handler uploadUrl = context -> {
-    State state = context.getAttributes().require(TokenMatcher.State.class);
-    AssetKind assetKind = context.getAttributes().require(AssetKind.class);
-    ConanCoords coord = convertFromState(state);
-    String assetPath = getAssetPath(coord);
+    private static final String CLIENT_CHECKSUM = "X-Checksum-Sha1";
 
-    return context.getRepository()
-        .facet(ConanHostedFacet.class)
-        .uploadDownloadUrl(assetPath, coord, context.getRequest().getPayload(), assetKind);
-  };
+    final Handler uploadUrl = context -> {
+        State state = context.getAttributes().require(TokenMatcher.State.class);
+        AssetKind assetKind = context.getAttributes().require(AssetKind.class);
+        ConanCoords coord = convertFromState(state);
+        String assetPath = getAssetPath(coord);
 
-  final Handler uploadManifest = context -> upload(context, "conanmanifest.txt");
+        return context.getRepository()
+                .facet(ConanHostedFacet.class)
+                .uploadDownloadUrl(assetPath, coord, context.getRequest().getPayload(), assetKind);
+    };
 
-  final Handler uploadConanFile = context -> upload(context, "conanfile.py");
+    final Handler uploadManifest = context -> upload(context, "conanmanifest.txt");
 
-  final Handler uploadConanInfo = context -> upload(context, "conaninfo.txt");
+    final Handler uploadConanFile = context -> upload(context, "conanfile.py");
 
-  final Handler uploadConanPackage = context -> upload(context, "conan_package.tgz");
-  
-  final Handler uploadConanSources = context -> upload(context, "conan_sources.tgz");
+    final Handler uploadConanInfo = context -> upload(context, "conaninfo.txt");
 
-  final Handler uploadConanExport = context -> upload(context, "conan_export.tgz");
+    final Handler uploadConanPackage = context -> upload(context, "conan_package.tgz");
 
-  private Response upload(final Context context, final String filename) throws IOException {
+    final Handler uploadConanSources = context -> upload(context, "conan_sources.tgz");
 
-    /* If the header contains {@link HostedHandlers#CLIENT_CHECKSUM} then this is supposed
+    final Handler uploadConanExport = context -> upload(context, "conan_export.tgz");
+
+    private Response upload(final Context context, final String filename) throws IOException {
+
+        /* If the header contains {@link HostedHandlers#CLIENT_CHECKSUM} then this is supposed
     to be used to check against existing content.
     Currently we always assume it is not a mtch by returning a 404
     TODO Check the SHA1 against existing asset to determine if an upload is required
-     */
-    Headers headers = context.getRequest().getHeaders();
-    String method = context.getRequest().getAction();
-    
-    if(headers.contains(CLIENT_CHECKSUM) && method != "PUT") {
-      return new Response.Builder()
-          .status(Status.failure(NOT_FOUND))
-          .build();
+         */
+        Headers headers = context.getRequest().getHeaders();
+        String method = context.getRequest().getAction();
+
+        if (headers.contains(CLIENT_CHECKSUM) && method != "PUT") {
+            return new Response.Builder()
+                    .status(Status.failure(NOT_FOUND))
+                    .build();
+        }
+
+        State state = context.getAttributes().require(State.class);
+        AssetKind assetKind = context.getAttributes().require(AssetKind.class);
+        ConanCoords coord = convertFromState(state);
+        String assetPath = getAssetPath(coord) + "/" + filename;
+
+        return context.getRepository()
+                .facet(ConanHostedFacet.class)
+                .upload(assetPath, coord, context.getRequest().getPayload(), assetKind);
     }
 
-    State state = context.getAttributes().require(State.class);
-    AssetKind assetKind = context.getAttributes().require(AssetKind.class);
-    ConanCoords coord = convertFromState(state);
-    String assetPath = getAssetPath(coord) + "/" + filename;
+    private String getAssetPath(final ConanCoords coord) {
+        return V1_CONANS + getPath(coord);
+    }
 
-    return context.getRepository()
-        .facet(ConanHostedFacet.class)
-        .upload(assetPath, coord, context.getRequest().getPayload(), assetKind);
-  }
+    final Handler downloadUrl = context -> {
+        State state = context.getAttributes().require(State.class);
+        ConanCoords coord = convertFromState(state);
+        String path = getAssetPath(coord) + "/download_urls";
 
-  private String getAssetPath(final ConanCoords coord) {
-    return V1_CONANS + getPath(coord);
-  }
+        return context.getRepository()
+                .facet(ConanHostedFacet.class)
+                .getDownloadUrl(path, context);
+    };
 
-  final Handler downloadUrl = context -> {
-    State state = context.getAttributes().require(State.class);
-    ConanCoords coord = convertFromState(state);
-    String path = getAssetPath(coord) + "/download_urls";
+    final Handler download = context
+            -> context.getRepository()
+                    .facet(ConanHostedFacet.class)
+                    .get(context);
 
-    return context.getRepository()
-        .facet(ConanHostedFacet.class)
-        .getDownloadUrl(path, context);
-  };
+    /**
+     * Acknowledges a ping request
+     */
+    final Handler ping = context -> {
+        log.debug("pong");
+        return HttpResponses.ok();
+    };
 
-  final Handler download = context ->
-      context.getRepository()
-          .facet(ConanHostedFacet.class)
-          .get(context);
+    final Handler searchV1 = context -> {
+        Parameters parameters = context.getRequest().getParameters();
+        Repository repository = context.getRepository();
+        log.debug("[searchV1] repository: {} parameters: {}", repository.getName(), parameters);
+        return HttpResponses.ok(
+                context.getRepository()
+                        .facet(ConanSearchFacet.class)
+                        .searchV1(parameters));
+    };
 
-  /**
-   * Acknowledges a ping request
-   */
-  final Handler ping = context -> {
-    log.debug("pong");
-    return HttpResponses.ok();
-  };
+    final Handler packageSnapshot = context -> {
+        State state = context.getAttributes().require(State.class);
+        ConanCoords coord = convertFromState(state);
+        String path = getAssetPath(coord);
 
-  final Handler searchV1 = context -> {
-    return context.getRepository()
-        .facet(ConanHostedFacet.class)
-        .getSearchResults(context);
-  };
+        return context.getRepository()
+                .facet(ConanHostedFacet.class)
+                .getPackageSnapshot(path, context);
+    };
 
-  final Handler packageSnapshot = context -> {
-    State state = context.getAttributes().require(State.class);
-    ConanCoords coord = convertFromState(state);
-    String path = getAssetPath(coord);
+    /**
+     * Checks if there is a Bearer Authentication: token otherwise returns 401
+     */
+    final Handler checkCredentials = context -> {
+        State state = context.getAttributes().require(TokenMatcher.State.class);
+        Repository repository = context.getRepository();
+        log.debug("[checkCredentials] repository: {} tokens: {}", repository.getName(), state.getTokens());
 
-    return context.getRepository()
-            .facet(ConanHostedFacet.class)
-            .getPackageSnapshot(path, context);
-  };
+        return repository.facet(ConanTokenFacet.class).user(context);
+    };
 
-  /**
-   * Checks if there is a Bearer Authentication: token
-   * otherwise returns 401
-   */
-  final Handler checkCredentials = context -> {
-    State state = context.getAttributes().require(TokenMatcher.State.class);
-    Repository repository = context.getRepository();
-    log.debug("[checkCredentials] repository: {} tokens: {}", repository.getName(), state.getTokens());
+    /**
+     * Authenticates the endpoint, generates a response containing the token to
+     * be used by the client
+     */
+    final Handler authenticate = context -> {
+        State state = context.getAttributes().require(TokenMatcher.State.class);
+        Repository repository = context.getRepository();
+        log.debug("[authenticate] repository: {} tokens: {}", repository.getName(), state.getTokens());
 
-    return repository.facet(ConanTokenFacet.class).user(context);
-  };
-
-  /**
-   * Authenticates the endpoint, generates a response containing the token to be used by the client
-   */
-  final Handler authenticate = context -> {
-    State state = context.getAttributes().require(TokenMatcher.State.class);
-    Repository repository = context.getRepository();
-    log.debug("[authenticate] repository: {} tokens: {}", repository.getName(), state.getTokens());
-
-    return repository.facet(ConanTokenFacet.class).login(context);
-  };
+        return repository.facet(ConanTokenFacet.class).login(context);
+    };
 }

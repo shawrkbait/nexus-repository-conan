@@ -12,26 +12,29 @@
  */
 package org.sonatype.repository.conan.internal.hosted;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import static com.google.common.base.Preconditions.checkNotNull;
+import com.google.common.base.Supplier;
+import com.google.common.hash.HashCode;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
-
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Named;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.hash.HashCode;
 import org.sonatype.nexus.common.collect.AttributesMap;
+import org.sonatype.nexus.common.collect.NestedAttributesMap;
 import org.sonatype.nexus.common.hash.HashAlgorithm;
 import org.sonatype.nexus.repository.Facet.Exposed;
 import org.sonatype.nexus.repository.FacetSupport;
 import org.sonatype.nexus.repository.http.HttpResponses;
+import static org.sonatype.nexus.repository.http.HttpStatus.OK;
 import org.sonatype.nexus.repository.storage.Asset;
 import org.sonatype.nexus.repository.storage.AssetBlob;
+import static org.sonatype.nexus.repository.storage.AssetEntityAdapter.P_ASSET_KIND;
 import org.sonatype.nexus.repository.storage.Bucket;
 import org.sonatype.nexus.repository.storage.Component;
 import org.sonatype.nexus.repository.storage.StorageFacet;
@@ -39,32 +42,26 @@ import org.sonatype.nexus.repository.storage.StorageTx;
 import org.sonatype.nexus.repository.storage.TempBlob;
 import org.sonatype.nexus.repository.transaction.TransactionalStoreBlob;
 import org.sonatype.nexus.repository.view.Content;
+import static org.sonatype.nexus.repository.view.Content.maintainLastModified;
+import static org.sonatype.nexus.repository.view.ContentTypes.APPLICATION_JSON;
 import org.sonatype.nexus.repository.view.Context;
 import org.sonatype.nexus.repository.view.Payload;
 import org.sonatype.nexus.repository.view.Response;
+import static org.sonatype.nexus.repository.view.Status.success;
 import org.sonatype.nexus.repository.view.payloads.StreamPayload;
 import org.sonatype.nexus.repository.view.payloads.StreamPayload.InputStreamSupplier;
 import org.sonatype.nexus.repository.view.payloads.StringPayload;
 import org.sonatype.nexus.transaction.UnitOfWork;
 import org.sonatype.repository.conan.internal.AssetKind;
 import org.sonatype.repository.conan.internal.metadata.ConanCoords;
-import org.sonatype.repository.conan.internal.utils.ConanFacetUtils;
-
-import com.google.common.base.Supplier;
-
-import static com.google.common.base.Preconditions.checkNotNull;
-import static org.sonatype.nexus.repository.http.HttpStatus.OK;
-import static org.sonatype.nexus.repository.storage.AssetEntityAdapter.P_ASSET_KIND;
-import static org.sonatype.nexus.repository.view.Content.maintainLastModified;
-import static org.sonatype.nexus.repository.view.ContentTypes.APPLICATION_JSON;
-import static org.sonatype.nexus.repository.view.Status.success;
 import static org.sonatype.repository.conan.internal.metadata.ConanMetadata.GROUP;
 import static org.sonatype.repository.conan.internal.metadata.ConanMetadata.PROJECT;
 import static org.sonatype.repository.conan.internal.metadata.ConanMetadata.STATE;
 import static org.sonatype.repository.conan.internal.metadata.ConanMetadata.VERSION;
-import static org.sonatype.repository.conan.internal.proxy.ConanProxyHelper.HASH_ALGORITHMS;
 import static org.sonatype.repository.conan.internal.proxy.ConanProxyHelper.findAsset;
 import static org.sonatype.repository.conan.internal.proxy.ConanProxyHelper.toContent;
+import org.sonatype.repository.conan.internal.utils.ConanFacetUtils;
+import static org.sonatype.repository.conan.internal.utils.ConanFacetUtils.HASH_ALGORITHMS;
 import static org.sonatype.repository.conan.internal.utils.ConanFacetUtils.findComponent;
 
 /**
@@ -178,6 +175,7 @@ public class ConanHostedFacet
           .group(coord.getGroup())
           .name(coord.getProject())
           .version(coord.getVersion());
+      component.attributes().set(STATE, coord.getChannel());
     }
     tx.saveComponent(component);
 
@@ -262,20 +260,6 @@ public class ConanHostedFacet
     }
     ObjectMapper mapper = new ObjectMapper();
     String response = mapper.writeValueAsString(fileHashMap);
-    return new Response.Builder()
-            .status(success(OK))
-            .payload(new StringPayload(response, APPLICATION_JSON))
-            .build();
-  }
-
-  public Response getSearchResults(final Context context) throws IOException{
-    Map<String, String[]> resHashMap = new HashMap<>();
-    String[] dummy = {"Poco/1.7.8p3@pocoproject/stable"};
-
-    resHashMap.put("results", dummy);
-    ObjectMapper mapper = new ObjectMapper();
-    String response = mapper.writeValueAsString(resHashMap);
-
     return new Response.Builder()
             .status(success(OK))
             .payload(new StringPayload(response, APPLICATION_JSON))

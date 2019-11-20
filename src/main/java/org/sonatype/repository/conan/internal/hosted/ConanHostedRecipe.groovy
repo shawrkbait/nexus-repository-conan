@@ -35,6 +35,7 @@ import org.sonatype.repository.conan.internal.AssetKind
 import org.sonatype.repository.conan.internal.ConanFormat
 import org.sonatype.repository.conan.internal.ConanRecipeSupport
 import org.sonatype.repository.conan.internal.security.token.ConanTokenFacet
+import org.sonatype.repository.conan.internal.search.ConanSearchFacetHosted
 import org.sonatype.nexus.repository.search.SearchFacet
 
 import com.google.inject.Provider
@@ -132,7 +133,9 @@ class ConanHostedRecipe
   @Inject
   Provider<ConanTokenFacet> tokenFacet
 
-
+  @Inject
+  Provider<ConanSearchFacetHosted> conanSearchFacet
+  
   @Inject
   HostedHandlers hostedHandler
 
@@ -158,6 +161,7 @@ class ConanHostedRecipe
     repository.attach(storageFacet.get())
     repository.attach(attributesFacet.get())
     repository.attach(searchFacet.get())
+    repository.attach(conanSearchFacet.get())
   }
 
   ViewFacet configure(final ConfigurableViewFacet facet) {
