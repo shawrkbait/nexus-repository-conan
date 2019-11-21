@@ -22,6 +22,7 @@ import static org.sonatype.repository.conan.internal.metadata.ConanMetadata.VERS
 class ConanMatcher
 {
   public static final String PING = "/v1/ping"
+  public static final String SEARCH_V1 = "/v1/conans/search"
 
   protected static String DOWNLOAD_FORM = "{${PROJECT}:.+}/{${VERSION}:.+}/{${GROUP}:.+}/{${STATE}:.+}"
 
@@ -130,6 +131,18 @@ class ConanMatcher
         and(
             new ActionMatcher(GET),
             new LiteralMatcher(PING)
+        )
+    )
+  }
+  
+  /**
+   * Matches on search endpoint
+   */
+  static Builder searchV1() {
+    new Builder().matcher(
+        and(
+            new ActionMatcher(GET),
+            new TokenMatcher(SEARCH_V1)
         )
     )
   }

@@ -58,6 +58,8 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static org.sonatype.nexus.common.hash.HashAlgorithm.MD5;
 import static org.sonatype.nexus.repository.storage.AssetEntityAdapter.P_ASSET_KIND;
 import static org.sonatype.nexus.repository.view.Content.maintainLastModified;
+import org.sonatype.nexus.repository.view.Parameters;
+import org.sonatype.nexus.repository.view.ViewUtils;
 import static org.sonatype.repository.conan.internal.AssetKind.CONAN_PACKAGE;
 import static org.sonatype.repository.conan.internal.AssetKind.DOWNLOAD_URL;
 import static org.sonatype.repository.conan.internal.proxy.ConanProxyHelper.HASH_ALGORITHMS;
@@ -95,7 +97,8 @@ public class ConanProxyFacet
   @Nullable
   @Override
   protected Content getCachedContent(final Context context) throws IOException {
-    if (context.getRequest().getPath().equals("/v1/ping")) {
+    if (context.getRequest().getPath().equals("/v1/ping") || 
+            context.getRequest().getPath().equals(ConanMatcher.SEARCH_V1)) {
       return null;
     }
     AssetKind assetKind = context.getAttributes().require(AssetKind.class);
@@ -128,7 +131,8 @@ public class ConanProxyFacet
 
   @Override
   protected Content store(final Context context, final Content content) throws IOException {
-    if (context.getRequest().getPath().equals(ConanMatcher.PING)) {
+    if (context.getRequest().getPath().equals(ConanMatcher.PING) || 
+            context.getRequest().getPath().equals(ConanMatcher.SEARCH_V1)) {
       return content;
     }
 
@@ -301,8 +305,15 @@ public class ConanProxyFacet
 
   @Override
   protected String getUrl(@Nonnull final Context context) {
+    String url = context.getRequest().getPath().substring(1); // omit leading slash
     if (context.getRequest().getPath().equals("/v1/ping")) {
       return context.getRequest().getPath();
+    }
+    else if (context.getRequest().getPath().equals(ConanMatcher.SEARCH_V1)) {
+        Parameters parameters = context.getRequest().getParameters();
+        if(parameters != null) {
+            return ViewUtils.buildUrlWithParameters(url, parameters);
+        }
     }
     AssetKind assetKind = context.getAttributes().require(AssetKind.class);
 
@@ -332,7 +343,8 @@ public class ConanProxyFacet
   @Nonnull
   @Override
   protected CacheController getCacheController(@Nonnull final Context context) {
-    if (context.getRequest().getPath().equals("/v1/ping")) {
+    if (context.getRequest().getPath().equals("/v1/ping") ||
+            context.getRequest().getPath().equals(ConanMatcher.SEARCH_V1)) {
       return cacheControllerHolder.get(CacheControllerHolder.METADATA);
     }
     final AssetKind assetKind = context.getAttributes().require(AssetKind.class);
